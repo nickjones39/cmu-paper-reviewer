@@ -12,6 +12,7 @@ from backend.database import Base
 class SubmissionMode(str, enum.Enum):
     queue = "queue"
     byok = "byok"
+    local = "local"  # [local-models fork]
 
 
 class SubmissionStatus(str, enum.Enum):

@@ -1,0 +1,75 @@
+# Fork-only: merge prometheus-eval/cmu-paper-reviewer into main every week,
+# run the fork's tests, and push if they pass. On a conflict or a test failure
+# nothing is pushed and an issue is opened with the next steps.
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "17 19 * * 0" # Sundays 19:17 UTC (Monday morning in New Zealand)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository != 'prometheus-eval/cmu-paper-reviewer'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Merge upstream/main
+        id: merge
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/prometheus-eval/cmu-paper-reviewer.git
+          git fetch upstream
+          behind=$(git rev-list --count HEAD..upstream/main)
+          echo "behind=$behind" >> "$GITHUB_OUTPUT"
+          if [ "$behind" = 0 ]; then echo "Up to date."; exit 0; fi
+          if git merge --no-edit upstream/main; then
+            echo "result=merged" >> "$GITHUB_OUTPUT"
+          else
+            git merge --abort
+            echo "result=conflict" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.merge.outputs.result == 'merged'
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Test the fork's integration
+        id: test
+        if: steps.merge.outputs.result == 'merged'
+        continue-on-error: true
+        run: |
+          pip install -r requirements.txt pytest
+          pip install --no-deps lmnr==0.7.52
+          python -m pytest tests/localmodels -q
+
+      - name: Push
+        if: steps.merge.outputs.result == 'merged' && steps.test.outcome == 'success'
+        run: git push origin HEAD:main
+
+      - name: Open an issue
+        if: steps.merge.outputs.result == 'conflict' || (steps.merge.outputs.result == 'merged' && steps.test.outcome != 'success')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ steps.merge.outputs.result == 'conflict' && 'merge conflicts' || 'failing fork tests' }}
+        run: |
+          gh issue create \
+            --title "Upstream sync needs attention ($RESULT)" \
+            --body "The weekly merge of prometheus-eval/cmu-paper-reviewer stopped with **$RESULT** (${{ steps.merge.outputs.behind }} upstream commits). Nothing was pushed.
+
+          Run \`fork/sync-upstream.sh\` locally and follow LOCAL_MODELS.md → *Hook points*. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

@@ -33,6 +33,8 @@ class ReviewService:
         self.litellm_base_url = litellm_base_url or settings.litellm_base_url
         self.tavily_api_key = tavily_api_key or settings.tavily_api_key
         self.review_settings = review_settings
+        from backend.localmodels import hooks as local_hooks  # [local-models fork]
+        local_hooks.configure_review_service(self)  # [local-models fork]
 
     def _build_llm(self) -> LLM:
         # Disable Claude/Anthropic-specific params that non-Claude models

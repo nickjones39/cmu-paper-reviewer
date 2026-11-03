@@ -32,3 +32,5 @@ peerreview_bench/**/conversations/
 **/__pycache__/
 
 peerreview_bench_internal/
+# [local-models fork] machine-specific local-model settings
+.env.local

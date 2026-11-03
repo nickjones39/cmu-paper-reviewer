@@ -164,6 +164,8 @@ def process_submission(submission: Submission):
     key = submission.key
     pdf_file = upload_path(key, submission.filename)
     is_byok = submission.mode == SubmissionMode.byok
+    from backend.localmodels import hooks as local_hooks  # [local-models fork]
+    is_byok = is_byok or local_hooks.is_local(submission)  # [local-models fork] local runs use the BYOK key path
 
     # Parse review settings
     review_settings = None
@@ -191,7 +193,9 @@ def process_submission(submission: Submission):
         else:
             logger.info("[%s] Starting OCR... (mode=%s)", key, submission.mode.value)
             update_status(key, SubmissionStatus.ocr)
-            if is_byok:
+            if local_hooks.use_local_ocr(submission):  # [local-models fork]
+                ocr = local_hooks.LocalOCRService()  # [local-models fork]
+            elif is_byok:
                 # BYOK: submitter's own Mistral key against the public Mistral API.
                 ocr = OCRService(
                     api_key=submission.user_mistral_api_key,
