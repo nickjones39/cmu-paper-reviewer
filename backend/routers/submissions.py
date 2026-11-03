@@ -119,8 +119,11 @@ async def submit_paper(
                    f"{settings.max_manuscript_pages}-page limit.",
         )
 
+    from backend.localmodels import hooks as local_hooks  # [local-models fork]
+    review_settings = local_hooks.check_submission(mode, review_settings)  # [local-models fork]
+
     # Validate mode
-    if mode not in ("queue", "byok"):
+    if mode not in ("queue", "byok", local_hooks.LOCAL_MODE):  # [local-models fork]
         raise HTTPException(status_code=400, detail="Invalid mode. Must be 'queue' or 'byok'.")
 
     # Mode-specific validation

@@ -230,19 +230,21 @@ async def post_debate_message(
 
     model_used = debate.model_used
     final_turn = current_turn >= 20
+    from backend.localmodels import hooks as local_hooks  # [local-models fork]
+    _local_llm = await local_hooks.debate_llm_overrides(session, key)  # [local-models fork]
 
     async def event_stream():
         import litellm
 
         full_content = ""
         try:
-            response = litellm.completion(
+            response = litellm.completion(**local_hooks.merge_debate_kwargs(_local_llm, dict(  # [local-models fork]
                 model=model_used,
                 api_key=settings.litellm_api_key,
                 api_base=settings.litellm_base_url,
                 messages=messages,
                 stream=True,
-            )
+            )))  # [local-models fork]
 
             for chunk in response:
                 delta = chunk.choices[0].delta
